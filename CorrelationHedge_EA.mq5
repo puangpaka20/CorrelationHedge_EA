@@ -31,7 +31,7 @@ input int    SlippageMax         = 30;       // Max Slippage in Points
 //--- Global Variables
 CTrade trade;
 int    TradesCountToday = 0;
-static datetime lastBarTime = 0;
+int    lastTradeDay     = -1;  // Track last known trading day for daily reset
 
 //--- Symbols
 const string GOLD_SYM   = "XAUUSD";
@@ -74,8 +74,11 @@ int OnInit()
    trade.SetDeviationInPoints(SlippageMax);
    trade.SetTypeFilling(ORDER_FILLING_FOK);  // Fill or Kill per broker spec
 
-   //--- Load today's trade count from history
+   //--- Load today's trade count from history and set initial day
    TradesCountToday = LoadTradesCountToday();
+   MqlDateTime dtInit;
+   TimeToStruct(TimeCurrent(), dtInit);
+   lastTradeDay = dtInit.day;
 
    Print("[INIT]  ", TimeToString(TimeCurrent()),
          " | EA Initialized | MagicNumber:", MagicNumber,
@@ -98,7 +101,20 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
 {
+   //--- Daily reset: reload TradesCountToday when date changes
+   MqlDateTime dtNow;
+   TimeToStruct(TimeCurrent(), dtNow);
+   if(dtNow.day != lastTradeDay)
+   {
+      int prev        = TradesCountToday;
+      TradesCountToday = LoadTradesCountToday();
+      lastTradeDay    = dtNow.day;
+      Print("[RESET] ", TimeToString(TimeCurrent()),
+            " | New day — TradesCountToday reset from ", prev, " to ", TradesCountToday);
+   }
+
    //--- Only process on new M15 bar open
+   static datetime lastBarTime = 0;
    datetime currentBarTime = iTime(GOLD_SYM, PERIOD_M15, 0);
    if(currentBarTime == lastBarTime)
       return;
